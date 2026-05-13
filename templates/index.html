@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>KUNI OS v3.0 - Панель управления</title>
+    <style>
+        body { background-color: #0d0e15; color: #c5c6c7; font-family: monospace; margin: 0; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; grid-gap: 20px; height: 92vh; }
+        .panel { border: 1px solid #1f2833; background: #1f283333; padding: 15px; border-radius: 5px; display: flex; flex-direction: column; }
+        .full-width { grid-column: span 2; height: 160px; }
+        h2 { color: #66fcf1; margin-top: 0; border-bottom: 1px solid #1f2833; padding-bottom: 5px; font-size: 14px; letter-spacing: 1px; }
+        #monitor-box { background: #050508; color: #00ffcc; padding: 10px; flex-grow: 1; overflow-y: auto; font-size: 12px; border-radius: 3px; border: 1px solid #111; }
+        #chat-box { flex-grow: 1; overflow-y: auto; margin-bottom: 10px; padding: 10px; background: #0b0c10; border-radius: 3px; border: 1px solid #111; }
+        .msg { margin-bottom: 10px; line-height: 1.4; }
+        .user { color: #66fcf1; font-weight: bold; }
+        .kuni { color: #45a29e; font-weight: bold; }
+        input, button { background: #0b0c10; border: 1px solid #45a29e; color: #fff; padding: 10px; font-family: monospace; border-radius: 3px; font-size: 13px; }
+        button:hover { background: #45a29e; color: #000; cursor: pointer; }
+        .stats { font-size: 13px; color: #ff007f; margin-bottom: 8px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- 1. ВЕРХНЯЯ ПАНЕЛЬ: МОНИТОР -->
+    <div class="panel full-width">
+        <h2>🔍 ГЛУБОКИЙ МОНИТОР МЫСЛЕЙ</h2>
+        <div class="stats" id="stats-line">🧬 Опыт: 0 эп. | ⚡ Дофамин: 50%</div>
+        <div id="monitor-box">Синхронизация с ядром...</div>
+    </div>
+
+    <!-- 2. ЛЕВАЯ ПАНЕЛЬ: ИНТЕРФЕЙС ЧАТА -->
+    <div class="panel">
+        <h2>💭 АКТИВНЫЙ ДИАЛОГ С KUNI</h2>
+        <div id="chat-box"></div>
+        <div style="display: flex; gap: 8px;">
+            <input type="text" id="user-input" style="flex-grow: 1;" placeholder="Введите сообщение...">
+            <button onclick="sendMsg()">Отправить</button>
+        </div>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <button onclick="sendSystem('+')" style="flex-grow: 1;">➕</button>
+            <button onclick="sendSystem('-')" style="flex-grow: 1;">➖</button>
+            <button onclick="sendSystem('clear')" style="flex-grow: 2;">🧹 Очистить контекст</button>
+        </div>
+    </div>
+
+    <!-- 3. ПРАВАЯ ПАНЕЛЬ: КОНТРОЛЬ МЕНТОРА -->
+    <div class="panel">
+        <h2>🎓 УПРАВЛЕНИЕ МЕНТОРОМ (LOCAL GPT)</h2>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+            <button onclick="triggerMentor('+')">🎲 Запустить случайный урок</button>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="theme-input" style="flex-grow: 1;" placeholder="Задать тему урока...">
+                <button onclick="triggerMentor('theme')">Обучить</button>
+            </div>
+            <div id="mentor-status" style="color: #92ff92; margin-top: 5px; font-size: 12px;">Статус: Готов</div>
+        </div>
+    </div>
+
+    <script>
+        // Отправка сообщений пользователя
+        async function sendMsg() {
+            let input = document.getElementById('user-input');
+            let text = input.value.trim();
+            if(!text) return;
+            
+            appendMsg('Вы', text, 'user');
+            input.value = '';
+
+            let response = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: text})
+            });
+            let data = await response.json();
+            appendMsg('KUNI', data.reply, 'kuni');
+        }
+
+        function appendMsg(sender, text, cls) {
+            let box = document.getElementById('chat-box');
+            box.innerHTML += `<div class="msg"><span class="${cls}">${sender}:</span> ${text}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        // Отправка системных кнопок (+ / - / clear)
+        async function sendSystem(cmd) {
+            let response = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: cmd})
+            });
+            let data = await response.json();
+            appendMsg('Система', data.reply, 'user');
+        }
+
+        // Ручной вызов уроков Ментора
+        async function triggerMentor(type) {
+            let action = type;
+            if(type === 'theme') {
+                let themeInput = document.getElementById('theme-input');
+                action = 'theme ' + themeInput.value;
+                themeInput.value = '';
+            }
+            document.getElementById('mentor-status').innerText = '⏳ Генерация текста урока...';
+            let response = await fetch('/mentor', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: action})
+            });
+            let data = await response.json();
+            document.getElementById('mentor-status').innerText = data.status || data.error;
+        }
+
+        // Посекундный сбор логов, дофамина и логов автономного сна
+        async function updateMonitor() {
+            try {
+                let response = await fetch('/monitor');
+                let data = await response.json();
+                
+                document.getElementById('stats-line').innerText = `🧬 Опыт: ${data.experience} эп. | ⚡ Дофамин: ${data.dopamine}%`;
+                
+                let monitorBox = document.getElementById('monitor-box');
+                monitorBox.innerHTML = data.logs.map(log => `<div>${log}</div>`).join('');
+                
+                // Проверка буфера на автономные события дневника
+                if (data.notifications && data.notifications.length > 0) {
+                    data.notifications.forEach(msg => {
+                        appendMsg('KUNI (Рефлексия)', msg, 'kuni');
+                    });
+                }
+            } catch(e) {}
+        }
+        setInterval(updateMonitor, 1000);
+    </script>
+</body>
+</html>
